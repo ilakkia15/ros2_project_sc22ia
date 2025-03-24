@@ -105,7 +105,7 @@ class Robot(Node):
             if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
                 # Alter the value of the flag
                 self.red_found = True
-                print("Flag (red found):", self.red_found)
+                print("Flag (red found):", self.red_found, cv2.contourArea(c))
 
         # Find the contours that appear within the green mask using the cv2.findContours() method
         # For <mode> use cv2.RETR_LIST for <method> use cv2.CHAIN_APPROX_SIMPLE
@@ -124,7 +124,7 @@ class Robot(Node):
             if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
                 # Alter the value of the flag
                 self.green_found = True
-                print("Flag (green found):", self.green_found)
+                print("Flag (green found):", self.green_found, cv2.contourArea(c))
 
         # Find the contours that appear within the blue mask using the cv2.findContours() method
         # For <mode> use cv2.RETR_LIST for <method> use cv2.CHAIN_APPROX_SIMPLE
@@ -143,20 +143,22 @@ class Robot(Node):
             if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
                 # Alter the value of the flag
                 self.blue_found = True
-                print("Flag (blue found):", self.blue_found)
+                print("Flag (blue found):", self.blue_found, cv2.contourArea(c))
 
             # Check if a flag has been set = colour object detected - follow the colour object
             if self.blue_found == True:
                 c = max(contours, key=cv2.contourArea)
-                if cv2.contourArea(c) > 5:
+                if cv2.contourArea(c) > 100000:
                     # Close to object, need to stop
                     # Set a flag to tell the robot to stop when in the main loop
                     self.stopMovingFlag = True
+                    print("Time to stop")
                     
                 elif cv2.contourArea(c) < 1:
                     # Far away from object, need to move forwards
                     # Set a flag to tell the robot to move forwards when in the main loop
                     self.moveForwardsFlag = True
+                    print("Time to move forwards")
 
         # Show the image
         cv2.namedWindow('camera_Feed', cv2.WINDOW_NORMAL)
@@ -260,7 +262,6 @@ def main(args=None):
 
     try:
         while rclpy.ok():
-            """
             # Publish moves
             # Check if a blue box has been detected
             if robot.blue_found == True:
@@ -272,14 +273,13 @@ def main(args=None):
                 elif robot.moveForwardsFlag == True:
                     print("Going to walk forward")
                     robot.walk_forward()
-            """
+            else:
             
-            # TODO: Add other movement
+                # TODO: Add other movement
 
-            robot.send_goal(-4.05, -3.51, 0.00256)
-            robot.walk_forward()
-            #rclpy.spin(robot)
-            pass
+                robot.walk_forward()
+                robot.send_goal(-8.67, -5.88, 0.00247)
+                #rclpy.spin(robot)
 
     except ROSInterruptException:
         pass
