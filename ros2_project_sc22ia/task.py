@@ -34,25 +34,22 @@ class Robot(Node):
         # Initialise the value you wish to use for sensitivity in the colour detection (10 should be enough)
         self.sensitivity = 10
 
-        # Initialise some standard movement messages such as a simple move forward and a message with all zeroes (stop)
-        self.move_forward_message = 'move forward'
-        self.stop_message = '000'
-        
-        self.moveBackwardsFlag = False
+        # Initialise flags for movement     
         self.moveForwardsFlag = False
+        self.moveBackwardsFlag = False
         self.stopMovingFlag = False
 
-        # Remember to initialise a CvBridge() and set up a subscriber to the image topic you wish to use
+        # Initialise a CvBridge() and set up a subscriber to the image topic you wish to use
         self.bridge = CvBridge()
         self.subscription = self.create_subscription(Image, '/camera/image_raw', self.callback, 10)
         self.subscription  # prevent unused variable warning
 
+        # Initialise an ActionClient()
         self.action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
     def callback(self, data):
-
         # Convert the received image into a opencv image
-        # But remember that you should always wrap a call to this conversion method in an exception handler
+        # Wrap a call to this conversion method in an exception handler
         try:
             image = self.bridge.imgmsg_to_cv2(data, 'bgr8')
         except CvBridgeError:
@@ -86,75 +83,105 @@ class Robot(Node):
         rg_mask = cv2.bitwise_or(red_mask, green_mask)
         rgb_mask = cv2.bitwise_or(rg_mask, blue_mask)
 
-        # TODO: Detect red and green as well
-
         # Find the contours that appear within the red mask using the cv2.findContours() method
         # For <mode> use cv2.RETR_LIST for <method> use cv2.CHAIN_APPROX_SIMPLE
         contours, _ = cv2.findContours(red_mask, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_SIMPLE)
         
         # Loop over the contours
-        if len(contours)>0:
-            # There are a few different methods for identifying which contour is the biggest
-            # Loop through the list and keep track of which contour is biggest or
-            # Use the max() method to find the largest contour
-            
+        if len(contours) > 0:            
+            # Find the largest contour
             c = max(contours, key=cv2.contourArea)
 
             # Check if the area of the shape you want is big enough to be considered
             # If it is then change the flag for that colour to be True(1)
-            if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
+            if cv2.contourArea(c) > 1:
                 # Alter the value of the flag
                 self.red_found = True
                 print("Flag (red found):", self.red_found, cv2.contourArea(c))
+
+                # Store the bounding rectangle variables
+                x, y, w, h = cv2.boundingRect(c)
+
+                # Determine the centre of the bounding rectangle
+                box_center_x = x + w // 2
+                box_center_y = y + h // 2
+
+                # Draw a rectangle around the green box
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         # Find the contours that appear within the green mask using the cv2.findContours() method
         # For <mode> use cv2.RETR_LIST for <method> use cv2.CHAIN_APPROX_SIMPLE
         contours, _ = cv2.findContours(green_mask, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_SIMPLE)
         
         # Loop over the contours
-        if len(contours)>0:
-            # There are a few different methods for identifying which contour is the biggest
-            # Loop through the list and keep track of which contour is biggest or
-            # Use the max() method to find the largest contour
-            
+        if len(contours) > 0:
+            # Find the largest contour
             c = max(contours, key=cv2.contourArea)
 
             # Check if the area of the shape you want is big enough to be considered
             # If it is then change the flag for that colour to be True(1)
-            if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
+            if cv2.contourArea(c) > 1:
                 # Alter the value of the flag
                 self.green_found = True
                 print("Flag (green found):", self.green_found, cv2.contourArea(c))
+
+                # Store the bounding rectangle variables
+                x, y, w, h = cv2.boundingRect(c)
+
+                # Determine the centre of the bounding rectangle
+                box_center_x = x + w // 2
+                box_center_y = y + h // 2
+
+                # Draw a rectangle around the green box
+                cv2.rectangle(image, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
         # Find the contours that appear within the blue mask using the cv2.findContours() method
         # For <mode> use cv2.RETR_LIST for <method> use cv2.CHAIN_APPROX_SIMPLE
         contours, _ = cv2.findContours(blue_mask, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_SIMPLE)
         
         # Loop over the contours
-        if len(contours)>0:
-            # There are a few different methods for identifying which contour is the biggest
-            # Loop through the list and keep track of which contour is biggest or
-            # Use the max() method to find the largest contour
-            
+        if len(contours) > 0:
+            # Find the largest contour
             c = max(contours, key=cv2.contourArea)
+            contour_area = cv2.contourArea(c)
 
             # Check if the area of the shape you want is big enough to be considered
             # If it is then change the flag for that colour to be True(1)
-            if cv2.contourArea(c) > 1: #<What do you think is a suitable area?>
+            if contour_area > 1:
                 # Alter the value of the flag
                 self.blue_found = True
-                print("Flag (blue found):", self.blue_found, cv2.contourArea(c))
+                print("Flag (blue found):", self.blue_found, contour_area)
+
+                # Store the bounding rectangle variables
+                x, y, w, h = cv2.boundingRect(c)
+
+                # Determine the centre of the bounding rectangle
+                box_center_x = x + w // 2
+                box_center_y = y + h // 2
+
+                # Moments can calculate the center of the contour
+                M = cv2.moments(c)
+                # Check that the denominator is not zero to avoid division by zero
+                if M['m00'] != 0:
+                    cx, cy = int(M['m10']/M['m00']), int(M['m01']/M['m00'])
+                # Set values
+                else:
+                    cx, cy = box_center_x, box_center_y
+
+                # Draw a rectangle around the blue box
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # Draw a circle to indicate the center of mass
+                cv2.circle(image,(cx, cy), 10, (255, 255, 255), -1)
 
             # Check if a flag has been set = colour object detected - follow the colour object
             if self.blue_found == True:
-                c = max(contours, key=cv2.contourArea)
-                if cv2.contourArea(c) > 100000:
+                if contour_area > 290000:
                     # Close to object, need to stop
                     # Set a flag to tell the robot to stop when in the main loop
                     self.stopMovingFlag = True
                     print("Time to stop")
-                    
-                elif cv2.contourArea(c) < 1:
+    
+                else:
                     # Far away from object, need to move forwards
                     # Set a flag to tell the robot to move forwards when in the main loop
                     self.moveForwardsFlag = True
@@ -273,13 +300,11 @@ def main(args=None):
                 elif robot.moveForwardsFlag == True:
                     print("Going to walk forward")
                     robot.walk_forward()
+            # A blue box has not been detected
             else:
-            
-                # TODO: Add other movement
-
+                # Add movement
                 robot.walk_forward()
-                robot.send_goal(-8.67, -5.88, 0.00247)
-                #rclpy.spin(robot)
+                robot.send_goal(-7.81, -9.86, 0.26)
 
     except ROSInterruptException:
         pass
