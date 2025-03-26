@@ -38,6 +38,8 @@ class Robot(Node):
         self.moveForwardsFlag = False
         self.moveBackwardsFlag = False
         self.stopMovingFlag = False
+        self.rotateLeftFlag = False
+        self.rotateRightFlag = False
 
         # Initialise a CvBridge() and set up a subscriber to the image topic you wish to use
         self.bridge = CvBridge()
@@ -173,6 +175,32 @@ class Robot(Node):
                 # Draw a circle to indicate the center of mass
                 cv2.circle(image,(cx, cy), 10, (255, 255, 255), -1)
 
+                if contour_area > 290000:
+                    # Close to object, need to stop
+                    # Set a flag to tell the robot to stop when in the main loop
+                    self.stopMovingFlag = True
+                    print("Time to stop")
+                else:
+                    image_center_x = image.shape[1] // 2
+
+                    # Check if the center of the contour is to the left of the camera
+                    if cx < image_center_x:
+                        # Rotate the robot towards the left
+                        self.rotateLeftFlag = True
+                        print("Time to rotate left")
+                    # Check if the center of the contour is to the right of the camera
+                    elif cx > image_center_x:
+                        # Rotate the robot towards the right
+                        self.rotateRightFlag = True
+                        print("Time to rotate right")
+                    # The center of the contour is at the center of the camera
+                    else:
+                        # Far away from object, need to move forwards
+                        # Set a flag to tell the robot to move forwards when in the main loop
+                        self.moveForwardsFlag = True
+                        print("Time to move forwards")
+
+            """
             # Check if a flag has been set = colour object detected - follow the colour object
             if self.blue_found == True:
                 if contour_area > 290000:
@@ -186,6 +214,7 @@ class Robot(Node):
                     # Set a flag to tell the robot to move forwards when in the main loop
                     self.moveForwardsFlag = True
                     print("Time to move forwards")
+            """
 
         # Show the image
         cv2.namedWindow('camera_Feed', cv2.WINDOW_NORMAL)
@@ -220,6 +249,26 @@ class Robot(Node):
         desired_velocity.linear.x = 0.0  # Send zero velocity to stop the robot
         
         self.publisher.publish(desired_velocity)
+
+    def rotate_left(self):
+        desired_velocity = Twist()
+
+        desired_velocity.angular.z = 0.1
+        #desired_velocity.linear.x = 0.1 # Forward with 0.1 m/s
+        
+        #for _ in range(30):  # Stop for a brief moment
+        self.publisher.publish(desired_velocity)
+        self.rate.sleep()
+
+    def rotate_right(self):
+        desired_velocity = Twist()
+
+        desired_velocity.angular.z = -0.1
+        #desired_velocity.linear.x = 0.1 # Forward with 0.1 m/s
+        
+        #for _ in range(30):  # Stop for a brief moment
+        self.publisher.publish(desired_velocity)
+        self.rate.sleep()
 
     # Add functions to go to specific point on map
     def send_goal(self, x, y, yaw):
@@ -287,24 +336,34 @@ def main(args=None):
     thread = threading.Thread(target=rclpy.spin, args=(robot,), daemon=True)
     thread.start()
 
+
     try:
+        robot.walk_forward()
+        robot.send_goal(-7.81, -9.86, 0.26)
+
         while rclpy.ok():
             # Publish moves
             # Check if a blue box has been detected
             if robot.blue_found == True:
-                # Check if the robot should stop
                 if robot.stopMovingFlag == True:
                     print("Going to stop")
                     robot.stop()
-                # Check if the robot should move forward
-                elif robot.moveForwardsFlag == True:
-                    print("Going to walk forward")
-                    robot.walk_forward()
+                else:
+                    if robot.rotateLeftFlag == True:
+                        print("Going to rotate left")
+                        robot.rotate_left()
+                    if robot.rotateRightFlag == True:
+                        print("Going to rotate right")
+                        robot.rotate_right()
+                    # Check if the robot should move forward
+                    if robot.moveForwardsFlag == True:
+                        print("Going to walk forward")
+                        robot.walk_forward()
             # A blue box has not been detected
-            else:
+            #else:
                 # Add movement
-                robot.walk_forward()
-                robot.send_goal(-7.81, -9.86, 0.26)
+                #robot.walk_forward()
+                #robot.send_goal(-7.81, -9.86, 0.26)
 
     except ROSInterruptException:
         pass
