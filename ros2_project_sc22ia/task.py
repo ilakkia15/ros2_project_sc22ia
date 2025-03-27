@@ -41,6 +41,9 @@ class Robot(Node):
         self.rotateLeftFlag = False
         self.rotateRightFlag = False
 
+        # Initialise a flag for navigation
+        self.navigatingToGoal = False
+
         # Initialise a CvBridge() and set up a subscriber to the image topic you wish to use
         self.bridge = CvBridge()
         self.subscription = self.create_subscription(Image, '/camera/image_raw', self.callback, 10)
@@ -175,7 +178,7 @@ class Robot(Node):
                 # Draw a circle to indicate the center of mass
                 cv2.circle(image,(cx, cy), 10, (255, 255, 255), -1)
 
-                if contour_area > 290000:
+                if contour_area > 300000:
                     # Close to object, need to stop
                     # Set a flag to tell the robot to stop when in the main loop
                     self.stopMovingFlag = True
@@ -272,21 +275,26 @@ class Robot(Node):
 
     # Add functions to go to specific point on map
     def send_goal(self, x, y, yaw):
-        goal_msg = NavigateToPose.Goal()
-        goal_msg.pose.header.frame_id = 'map'
-        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
+        # Check if the robot is not currently navigating to a goal
+        if self.navigatingToGoal == False:
+            # Set the flag to True to indicate that the robot is navigating
+            self.navigatingToGoal = True
 
-        # Position
-        goal_msg.pose.pose.position.x = x
-        goal_msg.pose.pose.position.y = y
+            goal_msg = NavigateToPose.Goal()
+            goal_msg.pose.header.frame_id = 'map'
+            goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
 
-        # Orientation
-        goal_msg.pose.pose.orientation.z = sin(yaw / 2)
-        goal_msg.pose.pose.orientation.w = cos(yaw / 2)
+            # Position
+            goal_msg.pose.pose.position.x = x
+            goal_msg.pose.pose.position.y = y
 
-        self.action_client.wait_for_server()
-        self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
-        self.send_goal_future.add_done_callback(self.goal_response_callback)
+            # Orientation
+            goal_msg.pose.pose.orientation.z = sin(yaw / 2)
+            goal_msg.pose.pose.orientation.w = cos(yaw / 2)
+
+            self.action_client.wait_for_server()
+            self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
+            self.send_goal_future.add_done_callback(self.goal_response_callback)
 
     def goal_response_callback(self, future):
         goal_handle = future.result()
@@ -301,6 +309,9 @@ class Robot(Node):
     def get_result_callback(self, future):
         result = future.result().result
         self.get_logger().info(f'Navigation result: {result}')
+
+        # Set the flag to False to indicate that the robot is not navigating
+        self.navigatingToGoal = False
 
     def feedback_callback(self, feedback_msg):
         feedback = feedback_msg.feedback
@@ -336,22 +347,41 @@ def main(args=None):
     thread = threading.Thread(target=rclpy.spin, args=(robot,), daemon=True)
     thread.start()
 
-
     try:
         robot.walk_forward()
-        robot.send_goal(-7.81, -9.86, 0.26)
+        # Create a list to store the goal points
+        goal_points = [
+            [-0.905, 4.05, -0.00143],
+            [6.62, 4.88, -0.00143],
+            [7.17, -2.01, -0.00143],
+            [-1.27, -5.05, -0.00143],
+            [-7.81, -9.86, 0.26]
+        ]
+
+        # Loop through each of the goal points
+        for goal_point in goal_points:
+            # Send the robot to the current goal point
+            robot.send_goal(goal_point[0], goal_point[1], goal_point[2])
+            
+            # Wait for the robot to finish navigating to the goal
+            while robot.navigatingToGoal == True:
+                pass
 
         while rclpy.ok():
             # Publish moves
             # Check if a blue box has been detected
             if robot.blue_found == True:
+                # Check if the robot should stop
                 if robot.stopMovingFlag == True:
                     print("Going to stop")
                     robot.stop()
+                # The robot should not stop
                 else:
+                    # Check if the robot should rotate left
                     if robot.rotateLeftFlag == True:
                         print("Going to rotate left")
                         robot.rotate_left()
+                    # Check if the robot should rotate right
                     if robot.rotateRightFlag == True:
                         print("Going to rotate right")
                         robot.rotate_right()
